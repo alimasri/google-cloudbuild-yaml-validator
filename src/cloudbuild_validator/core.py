@@ -34,7 +34,11 @@ class CloudBuildValidator:
         try:
             yamale.validate(self.schema, content)
         except yamale.YamaleError as e:
-            raise validators.CloudBuildValidationError(e) from e
+            errors = []
+            for result in e.results:
+                errors.extend(result.errors)
+            return errors
+
         content = content[0][0]
 
         errors = []

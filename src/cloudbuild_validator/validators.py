@@ -8,7 +8,8 @@ from cloudbuild_validator.config import settings
 
 class Validator(ABC):
     @abstractmethod
-    def validate(self, yaml_file_content: str) -> List[str]: ...
+    def validate(self, yaml_file_content: str) -> List[str]:
+        ...
 
 
 class CloudBuildValidationError(Exception):

@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import List
 
 import pytest
-
 from cloudbuild_validator import validators
 from cloudbuild_validator.core import CloudBuildValidator
 from cloudbuild_validator.validators import Validator
@@ -185,11 +184,8 @@ def test_validate_valid_yaml_invalid_rules(
 
 def test_invalid_yaml(valid_specifications_path, invalid_yaml_path):
     validator = CloudBuildValidator(valid_specifications_path)
-    with pytest.raises(validators.CloudBuildValidationError) as e:
-        validator.validate(invalid_yaml_path)
-        import yamale
-
-        assert isinstance(e.__cause__, yamale.YamaleError)
+    errors = validator.validate(invalid_yaml_path)
+    assert len(errors) > 0
 
 
 def test_multiple_documents_in_yaml(
