@@ -1,5 +1,4 @@
 import pytest
-
 from cloudbuild_validator import validators
 from cloudbuild_validator.validators import CloudBuildValidationError
 
