@@ -31,18 +31,21 @@ pip install -e .
 The validator can be run from the command line with the following syntax:
 
 ```bash
-cloudbuild-validator [-h] [-s SCHEMA] -f FILE
-```
+usage: cloudbuild-validator [-h] [-s SCHEMA] file
 
-### Options:
-- `-h, --help`: Show the help message and exit
-- `-s SCHEMA, --schema SCHEMA`: Path to the schema file to validate against
-- `-f FILE, --file FILE`: Path to the content file to validate
+positional arguments:
+  file                  Path to the content file to validate
+
+options:
+  -h, --help            show this help message and exit
+  -s SCHEMA, --schema SCHEMA
+                        Path to the schema file to validate against
+```
 
 ### Example
 
 ```bash
-cloudbuild-validator -f /path/to/cloudbuild.yaml
+cloudbuild-validator /path/to/cloudbuild.yaml
 ```
 
 ### Programmatic Usage
