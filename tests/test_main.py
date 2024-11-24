@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List
 
 import pytest
+
 from cloudbuild_validator import validators
 from cloudbuild_validator.core import CloudBuildValidator
 from cloudbuild_validator.validators import Validator

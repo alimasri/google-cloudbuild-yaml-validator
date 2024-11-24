@@ -1,4 +1,5 @@
 import pytest
+
 from cloudbuild_validator import validators
 from cloudbuild_validator.validators import CloudBuildValidationError
 
@@ -103,3 +104,54 @@ def test_invalid_substitution_variable_names():
     }
     with pytest.raises(CloudBuildValidationError):
         validators.SubstitutionVariablesValidator().validate(content)
+
+
+def test_undefined_secret_undefined():
+    content = {
+        "steps": [
+            {"id": "step1"},
+            {"id": "step2", "secretEnv": ["SECRET"]},
+        ],
+    }
+    with pytest.raises(CloudBuildValidationError):
+        validators.UndefinedSecretsValidator().validate(content)
+
+
+def test_unsed_secret_defined():
+    content = {
+        "steps": [
+            {"id": "step1", "secretEnv": ["SECRET"]},
+            {"id": "step2"},
+        ],
+        "availableSecrets": {
+            "secretManager": [{"env": "SECRET"}],
+        },
+    }
+    validators.UndefinedSecretsValidator().validate(content)
+
+
+def test_unsed_secret_unused():
+    content = {
+        "steps": [
+            {"id": "step1"},
+            {"id": "step2"},
+        ],
+        "availableSecrets": {
+            "secretManager": [{"env": "SECRET"}],
+        },
+    }
+    with pytest.raises(CloudBuildValidationError):
+        validators.UnusedSecretsValidator().validate(content)
+
+
+def test_unsed_secret_used():
+    content = {
+        "steps": [
+            {"id": "step1", "secretEnv": ["SECRET"]},
+            {"id": "step2"},
+        ],
+        "availableSecrets": {
+            "secretManager": [{"env": "SECRET"}],
+        },
+    }
+    validators.UnusedSecretsValidator().validate(content)

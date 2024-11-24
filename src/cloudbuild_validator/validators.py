@@ -8,8 +8,7 @@ from cloudbuild_validator.config import settings
 
 class Validator(ABC):
     @abstractmethod
-    def validate(self, yaml_file_content: str) -> List[str]:
-        ...
+    def validate(self, yaml_file_content: str) -> List[str]: ...
 
 
 class CloudBuildValidationError(Exception):
@@ -73,3 +72,55 @@ class SubstitutionVariablesValidator(Validator):
                         raise CloudBuildValidationError(
                             f"Undefined substitution variable {variable} in step `{step['id']}`"
                         )
+
+
+class UndefinedSecretsValidator(Validator):
+    """Check for undefined secrets in the content"""
+
+    def validate(self, content: dict) -> None:
+        secrets = content.get("availableSecrets", [])
+        if not secrets:
+            all_secrets = set()
+        else:
+            all_secrets = {
+                secret.get("env")
+                for secret_store in secrets.values()
+                for secret in secret_store
+            }
+
+        errors = []
+        for step in content["steps"]:
+            step_secrets = step.get("secretEnv", [])
+            if not step_secrets:
+                continue
+            for secret in step_secrets:
+                if secret not in all_secrets:
+                    errors.append(f"Undefined secret `{secret}` in step `{step['id']}`")
+        if errors:
+            raise CloudBuildValidationError("\n".join(errors))
+
+
+class UnusedSecretsValidator(Validator):
+    """Check for unused secrets in the content"""
+
+    def validate(self, content: dict) -> None:
+        secrets = content.get("availableSecrets", [])
+        if not secrets:
+            return
+        all_secrets = {
+            secret.get("env")
+            for secret_store in secrets.values()
+            for secret in secret_store
+        }
+
+        for step in content["steps"]:
+            step_secrets = step.get("secretEnv", [])
+            if not step_secrets:
+                continue
+            for secret in step_secrets:
+                all_secrets.discard(secret)
+
+        if all_secrets:
+            raise CloudBuildValidationError(
+                f"Secret(s) {all_secrets} are defined but not used"
+            )
