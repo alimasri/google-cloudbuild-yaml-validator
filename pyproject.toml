@@ -1,6 +1,6 @@
 [project]
 name = "cloudbuild-validator"
-version = "0.1.1"
+version = "0.1.2"
 description = "A robust and extensible tool for validating Google Cloud Build YAML configuration files against schema specifications and custom rules."
 readme = "README.md"
 authors = [
