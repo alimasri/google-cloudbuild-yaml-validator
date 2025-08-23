@@ -6,11 +6,11 @@ from loguru import logger
 from cloudbuild_validator.core import CloudBuildValidator
 
 
-def main(schema: Path, content: Path):
+def main(schema_file: Path, content: Path):
     log_prefix = f"[{content.name}]"
     logger.info(f"{log_prefix} validating...")
-    validator = CloudBuildValidator(schema)
-    errors = validator.validate(content)
+    validator = CloudBuildValidator(schema_file)
+    errors = validator.validate_file(content)
     if not errors:
         logger.info(f"{log_prefix} passed")
         raise SystemExit(0)
