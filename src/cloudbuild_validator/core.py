@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List, Union
 
 import yamale
 
@@ -7,9 +7,13 @@ from cloudbuild_validator import validators
 
 
 class CloudBuildValidator:
-    def __init__(self, speficifactions_file: Path, add_default_validators: bool = True):
+    def __init__(
+        self, schema_file: Path | str | None = None, add_default_validators: bool = True
+    ):
         self.validators = []
-        self.schema = yamale.make_schema(speficifactions_file)
+        self.schema = None
+        if schema_file is not None:
+            self.schema = yamale.make_schema(schema_file)
         if add_default_validators:
             for validator in dir(validators):
                 if (
@@ -25,23 +29,36 @@ class CloudBuildValidator:
     def remove_validator(self, validator: validators.Validator):
         self.validators.remove(validator)
 
-    def validate(self, yaml_file_path: Path) -> List[str]:
-        content = yamale.make_data(yaml_file_path)
-        if len(content) > 1:
+    def validate_file(self, yaml_file_path: Path) -> List[str]:
+        if not self.schema:
+            raise ValueError("No schema provided for validation")
+
+        yamale_data = yamale.make_data(yaml_file_path)
+        if len(yamale_data) > 1:
             raise validators.CloudBuildValidationError(
                 "Multiple documents found in the file"
             )
-        try:
-            yamale.validate(self.schema, content)
-        except yamale.YamaleError as e:
-            errors = []
-            for result in e.results:
-                errors.extend(result.errors)
-            return errors
 
-        content = content[0][0]
+        content = yamale_data[0][0]
+
+        return self.validate(content, yamale_data)
+
+    def validate(
+        self, content: Dict[str, Any], yamale_data: List | None = None
+    ) -> List[str]:
+        if not self.schema:
+            raise ValueError("No schema provided for validation")
 
         errors = []
+
+        if yamale_data is not None:
+            try:
+                yamale.validate(self.schema, yamale_data)
+            except yamale.YamaleError as e:
+                for result in e.results:
+                    errors.extend(result.errors)
+                return errors
+
         for validator in self.validators:
             try:
                 validator.validate(content)

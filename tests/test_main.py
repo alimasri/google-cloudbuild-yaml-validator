@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import List
 
 import pytest
@@ -8,16 +7,16 @@ from cloudbuild_validator.core import CloudBuildValidator
 from cloudbuild_validator.validators import Validator
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def fake_validator():
     class FakeValidator(Validator):
-        def validate(self, _: str) -> List[str]:
-            pass
+        def validate(self, yaml_file_content: str) -> List[str]:
+            return []
 
     return FakeValidator()
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def valid_yaml_content():
     return """
     steps:
@@ -30,8 +29,8 @@ def valid_yaml_content():
     """
 
 
-@pytest.fixture
-def valid_yaml_invalid_rules_content(tmpdir):
+@pytest.fixture(scope="module")
+def valid_yaml_invalid_rules_content():
     return """
     steps:
       - id: step1
@@ -44,8 +43,8 @@ def valid_yaml_invalid_rules_content(tmpdir):
     """
 
 
-@pytest.fixture
-def invalid_yaml_content(tmpdir):
+@pytest.fixture(scope="module")
+def invalid_yaml_content():
     return """
     steps:
       - id: step1
@@ -54,41 +53,43 @@ def invalid_yaml_content(tmpdir):
     """
 
 
-@pytest.fixture
-def valid_yaml_path(tmpdir, valid_yaml_content):
-    with open(tmpdir / "valid.yaml", "w") as f:
-        f.write(valid_yaml_content)
-    yield Path(tmpdir / "valid.yaml")
+@pytest.fixture(scope="module")
+def temp_file_factory(tmp_path_factory):
+    def _factory(content: str, filename: str):
+        tmpdir = tmp_path_factory.mktemp("data")
+        file_path = tmpdir / filename
+        with open(file_path, "w") as f:
+            f.write(content)
+        return str(file_path.absolute().as_posix())
+
+    return _factory
 
 
-@pytest.fixture
-def invalid_yaml_path(tmpdir, invalid_yaml_content):
-    with open(tmpdir / "invalid.yaml", "w") as f:
-        f.write(invalid_yaml_content)
-    yield Path(tmpdir / "invalid.yaml")
+@pytest.fixture(scope="module")
+def valid_yaml_path(temp_file_factory, valid_yaml_content):
+    return temp_file_factory(valid_yaml_content, "valid.yaml")
 
 
-@pytest.fixture
-def valid_yaml_invalid_rules_path(tmpdir, valid_yaml_invalid_rules_content):
-    with open(tmpdir / "valid_invalid_rules.yaml", "w") as f:
-        f.write(valid_yaml_invalid_rules_content)
-    yield Path(tmpdir / "valid_invalid_rules.yaml")
+@pytest.fixture(scope="module")
+def invalid_yaml_path(temp_file_factory, invalid_yaml_content):
+    return temp_file_factory(invalid_yaml_content, "invalid.yaml")
 
 
-@pytest.fixture
-def multiple_documents_yaml_path(tmpdir):
-    content = """\
-foo: bar
----
-baz: qux
-    """
-    with open(tmpdir / "multiple_documents.yaml", "w") as f:
-        f.write(content)
-    yield Path(tmpdir / "multiple_documents.yaml")
+@pytest.fixture(scope="module")
+def valid_yaml_invalid_rules_path(temp_file_factory, valid_yaml_invalid_rules_content):
+    return temp_file_factory(
+        valid_yaml_invalid_rules_content, "valid_invalid_rules.yaml"
+    )
 
 
-@pytest.fixture
-def valid_specifications_path(tmpdir):
+@pytest.fixture(scope="module")
+def multiple_documents_yaml_path(temp_file_factory):
+    content = """foo: bar\n---\nbaz: qux\n"""
+    return temp_file_factory(content, "multiple_documents.yaml")
+
+
+@pytest.fixture(scope="module")
+def valid_specifications_path(temp_file_factory):
     specifications = """
 steps: list(include('Step'), min=1)
 timeout: str(required=False)
@@ -141,28 +142,31 @@ Step:
   script: str(required=False)
   automapSubstitutions: bool(required=False)
     """
-    with open(tmpdir / "schema.yaml", "w") as f:
-        f.write(specifications)
-    yield Path(tmpdir / "schema.yaml")
+    return temp_file_factory(specifications, "cloudbuild-specifications.yaml")
 
 
-def test_add_validator(monkeypatch, fake_validator):
-    monkeypatch.setattr("cloudbuild_validator.core.yamale.make_schema", lambda x: None)
-    validator = CloudBuildValidator(None, add_default_validators=False)
+@pytest.mark.dependency()
+def test_no_default_validators():
+    validator = CloudBuildValidator(schema_file=None, add_default_validators=False)
+    assert len(validator.validators) == 0
+
+
+@pytest.mark.dependency(depends=["test_no_default_validators"])
+def test_add_validator(fake_validator):
+    validator = CloudBuildValidator(schema_file=None, add_default_validators=False)
     assert len(validator.validators) == 0
     validator.add_validator(fake_validator)
     assert len(validator.validators) == 1
     assert validator.validators[0] == fake_validator
 
 
-def test_default_validators_added(monkeypatch):
-    monkeypatch.setattr("cloudbuild_validator.core.yamale.make_schema", lambda x: None)
+def test_default_validators_added():
     validator = CloudBuildValidator(None)
     assert len(validator.validators) > 0
 
 
-def test_remove_validators(monkeypatch, fake_validator):
-    monkeypatch.setattr("cloudbuild_validator.core.yamale.make_schema", lambda x: None)
+@pytest.mark.dependency(depends=["test_add_validator"])
+def test_remove_validators(fake_validator):
     validator = CloudBuildValidator(None, add_default_validators=False)
     validator.add_validator(fake_validator)
     assert len(validator.validators) == 1
@@ -171,21 +175,21 @@ def test_remove_validators(monkeypatch, fake_validator):
 
 
 def test_validate_valid_yaml(valid_specifications_path, valid_yaml_path):
-    validator = CloudBuildValidator(valid_specifications_path)
-    assert validator.validate(valid_yaml_path) == []
+    validator = CloudBuildValidator(schema_file=valid_specifications_path)
+    assert validator.validate_file(valid_yaml_path) == []
 
 
 def test_validate_valid_yaml_invalid_rules(
     valid_specifications_path, valid_yaml_invalid_rules_path
 ):
-    validator = CloudBuildValidator(valid_specifications_path)
-    errors = validator.validate(valid_yaml_invalid_rules_path)
+    validator = CloudBuildValidator(schema_file=valid_specifications_path)
+    errors = validator.validate_file(valid_yaml_invalid_rules_path)
     assert len(errors) >= 1
 
 
 def test_invalid_yaml(valid_specifications_path, invalid_yaml_path):
-    validator = CloudBuildValidator(valid_specifications_path)
-    errors = validator.validate(invalid_yaml_path)
+    validator = CloudBuildValidator(schema_file=valid_specifications_path)
+    errors = validator.validate_file(invalid_yaml_path)
     assert len(errors) > 0
 
 
@@ -193,6 +197,41 @@ def test_multiple_documents_in_yaml(
     valid_specifications_path, multiple_documents_yaml_path
 ):
     with pytest.raises(validators.CloudBuildValidationError) as e:
-        validator = CloudBuildValidator(valid_specifications_path)
-        validator.validate(multiple_documents_yaml_path)
+        validator = CloudBuildValidator(schema_file=valid_specifications_path)
+        validator.validate_file(multiple_documents_yaml_path)
     assert "Multiple documents found in the file" in str(e.value)
+
+
+def test_validate_content_directly(valid_specifications_path):
+    validator = CloudBuildValidator(schema_file=valid_specifications_path)
+    content = {
+        "steps": [
+            {
+                "id": "step1",
+                "name": "gcr.io/cloud-builders/gcloud",
+                "args": ["projects", "list"],
+            }
+        ],
+        "options": {"workerPool": "default-pool"},
+        "serviceAccount": "email@project-id.iam.gserviceaccount.com",
+    }
+    errors = validator.validate(content)
+    assert errors == []
+
+
+def test_validate_content_with_validation_errors(valid_specifications_path):
+    validator = CloudBuildValidator(schema_file=valid_specifications_path)
+    content = {
+        "steps": [
+            {
+                "id": "step1",
+                "name": "gcr.io/cloud-builders/gcloud",
+                "args": ["projects", "list"],
+                "waitFor": ["step2"],  # This will cause a validation error
+            }
+        ],
+        "options": {"workerPool": "default-pool"},
+        "serviceAccount": "email@project-id.iam.gserviceaccount.com",
+    }
+    errors = validator.validate(content)
+    assert len(errors) >= 1
